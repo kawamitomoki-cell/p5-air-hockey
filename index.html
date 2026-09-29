@@ -2,49 +2,61 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CYBER AIR HOCKEY P2P</title>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>CYBER AIR HOCKEY</title>
+
+  <!-- PWA・ホーム画面アプリ化メタタグ -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AirHockey">
+  <meta name="theme-color" content="#0b0f19">
+
+  <!-- ライブラリ読み込み -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0f172a;
+    html, body {
+      background: #0b0f19;
       color: #f8fafc;
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 10px;
+      justify-content: flex-start;
+      min-height: 100vh;
+      overflow: hidden;
       user-select: none;
       touch-action: none;
+      padding: 10px;
     }
+
     #ui-bar {
       width: 100%;
       max-width: 650px;
       background: #1e293b;
-      padding: 10px 14px;
+      padding: 8px 14px;
       border-radius: 8px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       border: 1px solid #334155;
     }
-    #status-text {
-      font-size: 13px;
-      font-weight: bold;
-      color: #facc15;
-    }
+    .logo { font-weight: 900; letter-spacing: 1px; font-size: 15px; }
+    .logo span { color: #38bdf8; }
+    #status-text { font-size: 13px; font-weight: bold; color: #facc15; }
+
     #canvas-container {
       border: 2px solid #38bdf8;
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.25);
     }
+
+    /* 設定 & QRコード待機モーダル */
     #qr-modal {
       position: absolute;
       top: 50%;
@@ -53,19 +65,71 @@
       background: rgba(15, 23, 42, 0.95);
       border: 2px solid #38bdf8;
       border-radius: 12px;
-      padding: 20px;
+      padding: 18px 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
-      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+      gap: 12px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.8);
       z-index: 100;
+      max-width: 320px;
+      text-align: center;
     }
     #qrcode {
       background: #fff;
       padding: 8px;
       border-radius: 6px;
     }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    select {
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #38bdf8;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+    }
+    .action-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 13px;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    .action-btn:hover { background: #1d4ed8; }
+
+    /* 決着オーバーレイ */
+    #gameover-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #eab308;
+      border-radius: 12px;
+      padding: 24px 32px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.8);
+      z-index: 100;
+      text-align: center;
+    }
+    #winner-title { font-size: 28px; font-weight: 900; }
+
     #guide {
       margin-top: 8px;
       font-size: 12px;
@@ -77,20 +141,51 @@
 <body>
 
   <div id="ui-bar">
-    <div style="font-weight: bold; color: #38bdf8;">AIR HOCKEY ONLINE</div>
+    <div class="logo">CYBER <span>HOCKEY</span></div>
     <div id="status-text">通信初期化中...</div>
   </div>
 
   <div id="canvas-container"></div>
-  <div id="guide">操作: 画面を上下にスワイプ / ドラッグ、または W/S キー</div>
+  <div id="guide">操作: 画面を上下スワイプ / ドラッグ、または W/S キー</div>
 
+  <!-- ルール設定 ＆ 招待モーダル (ホスト用) -->
   <div id="qr-modal" style="display: none;">
-    <h4 style="color:#38bdf8;">スマホで読み取って対戦！</h4>
+    <h3 style="color:#38bdf8; font-size: 16px;">対戦相手を招待</h3>
     <div id="qrcode"></div>
-    <div style="font-size: 11px; color:#94a3b8;">カメラをかざすと自動で部屋に入ります</div>
+    <button class="action-btn" id="copy-url-btn">対戦URLをコピー</button>
+
+    <div style="width:100%; border-top: 1px solid #334155; padding-top: 10px; display:flex; flex-direction:column; gap:8px;">
+      <div class="settings-row">
+        <span>先取点数:</span>
+        <select id="win-score-select">
+          <option value="3">3点先取</option>
+          <option value="5" selected>5点先取</option>
+          <option value="10">10点先取</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <span>制限時間:</span>
+        <select id="time-limit-select">
+          <option value="60">60秒</option>
+          <option value="90" selected>90秒</option>
+          <option value="120">120秒</option>
+          <option value="0">無制限</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 決着画面 -->
+  <div id="gameover-modal">
+    <div id="winner-title">MATCH OVER</div>
+    <div id="winner-score" style="font-size: 16px; color:#cbd5e1;"></div>
+    <button class="action-btn" id="rematch-btn">もう一度対戦する</button>
   </div>
 
   <script>
+    // ========================================================
+    // サウンドエンジン (Web Audio API)
+    // ========================================================
     let audioCtx = null;
     function playBeep(freq, dur) {
       try {
@@ -108,12 +203,21 @@
       } catch(e) {}
     }
 
+    // ========================================================
+    // ゲーム本体設定 & 状態管理
+    // ========================================================
     const GAME_W = 650;
     const GAME_H = 380;
 
     let p1 = { y: 150, h: 80, score: 0 };
     let p2 = { y: 150, h: 80, score: 0 };
     let ball = { x: 325, y: 190, vx: 5, vy: 3, r: 9 };
+
+    // ルール設定
+    let maxScore = 5;
+    let timeLimitSec = 90;
+    let timeRemaining = 90;
+    let isGameOver = false;
 
     let role = "unknown";
     let conn = null;
@@ -123,19 +227,32 @@
       let canvas = createCanvas(GAME_W, GAME_H);
       canvas.parent('canvas-container');
       initNetwork();
+
+      // 1秒ごとのタイマー更新 (ホストが判定)
+      setInterval(() => {
+        if (role === "host" && conn && conn.open && !isGameOver) {
+          if (timeLimitSec > 0 && timeRemaining > 0) {
+            timeRemaining--;
+            if (timeRemaining <= 0) {
+              endGame();
+            }
+          }
+        }
+      }, 1000);
     }
 
     function draw() {
       background(15, 23, 42);
 
+      // センターライン
       stroke(30, 41, 59);
       strokeWeight(2);
       for (let y = 0; y < height; y += 15) {
         line(width / 2, y, width / 2, y + 8);
       }
 
+      // 操作入力
       let myPaddle = (role === "guest") ? p2 : p1;
-      
       if (keyIsDown(87) || keyIsDown(UP_ARROW)) myPaddle.y = max(10, myPaddle.y - 7);
       if (keyIsDown(83) || keyIsDown(DOWN_ARROW)) myPaddle.y = min(height - myPaddle.h - 10, myPaddle.y + 7);
 
@@ -143,8 +260,9 @@
         myPaddle.y = constrain(mouseY - myPaddle.h / 2, 10, height - myPaddle.h - 10);
       }
 
+      // ゲームロジック
       if (role === "host") {
-        if (conn && conn.open) {
+        if (conn && conn.open && !isGameOver) {
           ball.x += ball.vx;
           ball.y += ball.vy;
 
@@ -153,6 +271,7 @@
             playBeep(260, 0.05);
           }
 
+          // P1衝突
           if (ball.x - ball.r < 30 && ball.x + ball.r > 15) {
             if (ball.y > p1.y && ball.y < p1.y + p1.h) {
               ball.vx = abs(ball.vx) * 1.05;
@@ -162,6 +281,7 @@
             }
           }
 
+          // P2衝突
           if (ball.x + ball.r > width - 30 && ball.x - ball.r < width - 15) {
             if (ball.y > p2.y && ball.y < p2.y + p2.h) {
               ball.vx = -abs(ball.vx) * 1.05;
@@ -171,16 +291,29 @@
             }
           }
 
-          if (ball.x < 0) { p2.score++; resetBall(1); }
-          else if (ball.x > width) { p1.score++; resetBall(-1); }
+          // スコア加算 & 決着チェック
+          if (ball.x < 0) {
+            p2.score++;
+            playBeep(180, 0.2);
+            if (p2.score >= maxScore) endGame();
+            else resetBall(1);
+          } else if (ball.x > width) {
+            p1.score++;
+            playBeep(180, 0.2);
+            if (p1.score >= maxScore) endGame();
+            else resetBall(-1);
+          }
 
+          // 全状態を送信
           conn.send({
             t: 's',
             p1: p1.y,
             bx: Math.round(ball.x),
             by: Math.round(ball.y),
             s1: p1.score,
-            s2: p2.score
+            s2: p2.score,
+            tr: timeRemaining,
+            go: isGameOver
           });
         }
       } else if (role === "guest") {
@@ -189,13 +322,21 @@
         }
       }
 
+      // スコア & タイマー描画
       fill(255, 255, 255, 60);
-      textSize(42);
+      textSize(38);
       textStyle(BOLD);
       textAlign(CENTER, TOP);
-      text(p1.score, width / 2 - 70, 20);
-      text(p2.score, width / 2 + 70, 20);
+      text(p1.score, width / 2 - 80, 20);
+      text(p2.score, width / 2 + 80, 20);
 
+      // 上部中央に残り時間表示
+      fill('#38bdf8');
+      textSize(18);
+      let timeText = timeLimitSec > 0 ? `${timeRemaining}s` : "∞";
+      text(`TIME: ${timeText}`, width / 2, 25);
+
+      // パドル描画
       noStroke();
       fill('#ff3366');
       rect(15, p1.y, 14, p1.h, 5);
@@ -203,6 +344,7 @@
       fill('#00d2ff');
       rect(width - 29, p2.y, 14, p2.h, 5);
 
+      // ボール描画
       fill('#facc15');
       ellipse(ball.x, ball.y, ball.r * 2);
     }
@@ -212,41 +354,76 @@
       ball.y = height / 2;
       ball.vx = dir * 5;
       ball.vy = random(-3, 3);
-      playBeep(180, 0.2);
     }
 
+    // 決着判定
+    function endGame() {
+      isGameOver = true;
+      let title = "";
+      if (p1.score > p2.score) title = (role === "host") ? "YOU WIN!" : "YOU LOSE...";
+      else if (p2.score > p1.score) title = (role === "guest") ? "YOU WIN!" : "YOU LOSE...";
+      else title = "DRAW GAME!";
+
+      showGameOverUI(title, `${p1.score} - ${p2.score}`);
+    }
+
+    function showGameOverUI(title, scoreStr) {
+      const modal = document.getElementById('gameover-modal');
+      const titleEl = document.getElementById('winner-title');
+      titleEl.innerText = title;
+      titleEl.style.color = title.includes("WIN") ? "#4ade80" : (title.includes("LOSE") ? "#ef4444" : "#eab308");
+      document.getElementById('winner-score').innerText = `最終スコア: ${scoreStr}`;
+      modal.style.display = 'flex';
+    }
+
+    // 再戦リセット
+    function restartMatch() {
+      p1.score = 0;
+      p2.score = 0;
+      timeRemaining = timeLimitSec;
+      isGameOver = false;
+      resetBall(1);
+      document.getElementById('gameover-modal').style.display = 'none';
+
+      if (role === "host" && conn && conn.open) {
+        conn.send({ t: 'restart' });
+      }
+    }
+    document.getElementById('rematch-btn').onclick = restartMatch;
+
+    // ========================================================
+    // 通信 & QR & 設定
+    // ========================================================
     function initNetwork() {
       const urlParams = new URLSearchParams(window.location.search);
       const targetHostId = urlParams.get('room');
 
-      // Google公式のSTUNサーバー（厳しいWi-FiやNAT環境のファイアウォールを突破する設定）
-      const peerConfig = {
+      peer = new Peer({
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
+            { urls: 'stun:stun1.l.google.com:19302' }
           ]
         }
-      };
-
-      peer = new Peer(peerConfig);
+      });
 
       peer.on('open', (myId) => {
         if (targetHostId) {
+          // --- ゲスト側 ---
           role = "guest";
-          document.getElementById('status-text').innerText = "ホストへ接続中 (ICE通信)...";
+          document.getElementById('status-text').innerText = "対戦ルームへ接続中...";
           document.getElementById('status-text').style.color = "#38bdf8";
-
-          // 接続開始（バッファ遅延対策設定付き）
           conn = peer.connect(targetHostId, { reliable: false });
           setupGuestConnection();
         } else {
+          // --- ホスト側 ---
           role = "host";
-          document.getElementById('status-text').innerText = "QRスキャン待機中...";
+          document.getElementById('status-text').innerText = "QR / URL 招待待機中...";
           document.getElementById('status-text').style.color = "#facc15";
 
           const joinUrl = window.location.href.split('?')[0] + '?room=' + myId;
+
+          // QR生成
           document.getElementById('qrcode').innerHTML = "";
           new QRCode(document.getElementById("qrcode"), {
             text: joinUrl,
@@ -255,16 +432,29 @@
           });
           document.getElementById('qr-modal').style.display = 'flex';
 
+          // URLコピーボタンの処理
+          document.getElementById('copy-url-btn').onclick = () => {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(joinUrl).then(() => alert("対戦URLをコピーしました！LINEやDiscordに貼り付けられます。"));
+            } else {
+              prompt("以下のURLをコピーして相手に送ってください:", joinUrl);
+            }
+          };
+
+          // ルール変更リスナー
+          document.getElementById('win-score-select').onchange = (e) => {
+            maxScore = parseInt(e.target.value);
+          };
+          document.getElementById('time-limit-select').onchange = (e) => {
+            timeLimitSec = parseInt(e.target.value);
+            timeRemaining = timeLimitSec;
+          };
+
           peer.on('connection', (c) => {
             conn = c;
             setupHostConnection();
           });
         }
-      });
-
-      peer.on('error', (err) => {
-        document.getElementById('status-text').innerText = "エラー: " + err.type;
-        document.getElementById('status-text').style.color = "#ef4444";
       });
     }
 
@@ -273,15 +463,17 @@
         document.getElementById('qr-modal').style.display = 'none';
         document.getElementById('status-text').innerText = "● 対戦中 (赤・左)";
         document.getElementById('status-text').style.color = "#4ade80";
+
+        // 初回に現在のルール設定をゲストに同期
+        conn.send({
+          t: 'config',
+          ms: maxScore,
+          tl: timeLimitSec
+        });
       });
 
       conn.on('data', (d) => {
         if (d.t === 'p') p2.y = d.y;
-      });
-
-      conn.on('close', () => {
-        document.getElementById('status-text').innerText = "相手が切断しました";
-        document.getElementById('status-text').style.color = "#ef4444";
       });
     }
 
@@ -292,18 +484,26 @@
       });
 
       conn.on('data', (d) => {
-        if (d.t === 's') {
+        if (d.t === 'config') {
+          maxScore = d.ms;
+          timeLimitSec = d.tl;
+          timeRemaining = d.tl;
+        } else if (d.t === 's') {
           p1.y = d.p1;
           ball.x = d.bx;
           ball.y = d.by;
           p1.score = d.s1;
           p2.score = d.s2;
+          timeRemaining = d.tr;
+          if (d.go && !isGameOver) {
+            endGame();
+          }
+        } else if (d.t === 'restart') {
+          p1.score = 0;
+          p2.score = 0;
+          isGameOver = false;
+          document.getElementById('gameover-modal').style.display = 'none';
         }
-      });
-
-      conn.on('close', () => {
-        document.getElementById('status-text').innerText = "切断されました";
-        document.getElementById('status-text').style.color = "#ef4444";
       });
     }
   </script>
